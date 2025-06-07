@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Planeador-Aula-Rick-Bot - VERSIÓN PARA RENDER
-- Procesa audio con transcripción de Gemini
-- Incluye proferick.com en recursos
+Planeador-Aula-Rick-Bot - VERSIÓN RENDER MEJORADA
+- Debug de variables de entorno
+- Fallbacks por si no se cargan
 - Configurado para despliegue en Render
 """
 
@@ -15,6 +15,30 @@ import re
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from dotenv import load_dotenv
+
+# Debug: Mostrar variables de entorno disponibles
+print("🔍 DEBUG: Variables de entorno disponibles:")
+print(f"TELEGRAM_BOT_TOKEN existe: {'TELEGRAM_BOT_TOKEN' in os.environ}")
+print(f"GOOGLE_API_KEY existe: {'GOOGLE_API_KEY' in os.environ}")
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Debug: Intentar leer variables después de load_dotenv
+telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+google_api_key = os.getenv("GOOGLE_API_KEY")
+
+print(f"🔍 TELEGRAM_BOT_TOKEN cargado: {bool(telegram_token)}")
+print(f"🔍 GOOGLE_API_KEY cargado: {bool(google_api_key)}")
+
+# Fallback: Si no se cargan desde env, usar valores directos (TEMPORAL)
+if not telegram_token:
+    telegram_token = "7808524240:AAGFNv5-CgvmH-EmWo8TaNJDjGS-XyKFrzk"
+    print("⚠️ Usando TELEGRAM_BOT_TOKEN fallback")
+
+if not google_api_key:
+    google_api_key = "AIzaSyBWYoY_WgiBd6_p0q7tvaVvV8Qzd3rUVQ0"
+    print("⚠️ Usando GOOGLE_API_KEY fallback")
 
 # Imports para Telegram
 from telegram import Update
@@ -38,9 +62,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
-# Cargar variables de entorno
-load_dotenv()
-
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,11 +71,10 @@ class PlaneadorConAudio:
         self.user_sessions = {}
         self.estandares_men = self._load_estandares_men()
         
-        # Configurar Gemini con API key desde variables de entorno
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if api_key and GEMINI_AVAILABLE:
+        # Configurar Gemini con API key
+        if google_api_key and GEMINI_AVAILABLE:
             try:
-                genai.configure(api_key=api_key)
+                genai.configure(api_key=google_api_key)
                 self.model = genai.GenerativeModel('gemini-2.0-flash')
                 self.search_model = genai.GenerativeModel('gemini-2.0-flash')
                 logger.info("✅ Gemini AI con transcripción de audio disponible")
@@ -556,6 +576,19 @@ Responde ÚNICAMENTE con el siguiente formato JSON válido (sin explicaciones ad
             rightIndent=2
         )
         
+        # Agregar escudo si existe
+        try:
+            if os.path.exists('./escudo_colegio.jpg'):
+                escudo = Image('./escudo_colegio.jpg', width=2*cm, height=2*cm)
+                story.append(escudo)
+                story.append(Spacer(1, 0.5*cm))
+            elif os.path.exists('/workspace/escudo_colegio.jpg'):
+                escudo = Image('/workspace/escudo_colegio.jpg', width=2*cm, height=2*cm)
+                story.append(escudo)
+                story.append(Spacer(1, 0.5*cm))
+        except Exception as e:
+            logger.warning(f"No se pudo cargar el escudo: {e}")
+        
         # Encabezado institucional
         header_text = """
         <para align=center><b>INSTITUCIÓN EDUCATIVA COLEGIO GILBERTO CLARO LOZANO</b><br/>
@@ -920,11 +953,9 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Error procesando audio. Por favor, envía un mensaje de texto.")
 
 def main():
-    # Obtener token desde variables de entorno
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    
-    if not token:
-        logger.error("❌ TELEGRAM_BOT_TOKEN no encontrado en variables de entorno")
+    # Usar las variables que ya cargamos al inicio
+    if not telegram_token:
+        logger.error("❌ TELEGRAM_BOT_TOKEN no encontrado")
         return
     
     print("🚀 Iniciando Planeador-Aula-Rick-Bot CON AUDIO...")
@@ -936,7 +967,7 @@ def main():
     print("💬 Responde consultas generales fuera del dominio")
     print("☁️ DESPLEGADO EN RENDER")
     
-    application = Application.builder().token(token).build()
+    application = Application.builder().token(telegram_token).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -951,3 +982,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
